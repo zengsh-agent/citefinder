@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CiteFinder - Academic Citation Detection</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="container">
+                <h1 class="logo">CiteFinder</h1>
+                <p class="tagline">Detect citations in your paper and fetch real BibTeX</p>
+                <button class="settings-btn" onclick="toggleSettings()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <div class="container">
+                <div class="grid">
+                    <!-- Input Panel -->
+                    <div class="panel">
+                        <h2 class="panel-title">Input Text</h2>
+                        <textarea 
+                            id="inputText" 
+                            class="input-textarea" 
+                            placeholder="Paste your paper draft here..."
+                        ></textarea>
+                        <div class="input-footer">
+                            <span class="word-count" id="wordCount">0 words</span>
+                            <button class="analyze-btn" onclick="analyze()" id="analyzeBtn">
+                                Analyze
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Results Panel -->
+                    <div class="panel">
+                        <h2 class="panel-title">
+                            Citations Found
+                            <span class="result-count" id="resultCount"></span>
+                        </h2>
+                        <div id="results" class="results">
+                            <div class="empty-state">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M9 12h6m-3-3v6m-7 4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                </svg>
+                                <p>Enter text and click Analyze to find citations</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Powered by Semantic Scholar & Crossref APIs</p>
+        </footer>
+
+        <!-- Settings Modal -->
+        <div class="modal" id="settingsModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <button class="close-btn" onclick="toggleSettings()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>LLM Provider</label>
+                        <select id="llmProvider" onchange="updateProviderFields()">
+                            <option value="minimax">MiniMax (China)</option>
+                            <option value="openai">OpenAI (GPT)</option>
+                            <option value="gemini">Google Gemini</option>
+                        </select>
+                    </div>
+                    
+                    <div id="minimaxFields" class="provider-fields">
+                        <div class="form-group">
+                            <label>MiniMax API Key</label>
+                            <input type="password" id="minimaxApiKey" placeholder="Enter your API key">
+                        </div>
+                        <div class="form-group">
+                            <label>Base URL (optional)</label>
+                            <input type="text" id="minimaxBaseUrl" value="https://api.minimax.chat/v1">
+                        </div>
+                    </div>
+                    
+                    <div id="openaiFields" class="provider-fields" style="display:none">
+                        <div class="form-group">
+                            <label>OpenAI API Key</label>
+                            <input type="password" id="openaiApiKey" placeholder="sk-...">
+                        </div>
+                    </div>
+                    
+                    <div id="geminiFields" class="provider-fields" style="display:none">
+                        <div class="form-group">
+                            <label>Gemini API Key</label>
+                            <input type="password" id="geminiApiKey" placeholder="Enter your API key">
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="form-group">
+                        <label>SerpAPI Key (optional)</label>
+                        <input type="password" id="serpapiApiKey" placeholder="For Google Scholar search">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Tavily API Key (optional)</label>
+                        <input type="password" id="tavilyApiKey" placeholder="For web search">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="resetConfig()">Reset</button>
+                    <button class="btn-primary" onclick="saveConfig()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let config = {
+            llmProvider: 'minimax',
+            minimaxApiKey: '',
+            minimaxBaseUrl: 'https://api.minimax.chat/v1',
+            openaiApiKey: '',
+            geminiApiKey: '',
+            serpapiApiKey: '',
+            tavilyApiKey: ''
+        };
+
+        // Load config from localStorage
+        function loadConfig() {
+            const stored = localStorage.getItem('citefinder_config');
+            if (stored) {
+                config = { ...config, ...JSON.parse(stored) };
+            }
+            
+            document.getElementById('llmProvider').value = config.llmProvider;
+            document.getElementById('minimaxApiKey').value = config.minimaxApiKey;
+            document.getElementById('minimaxBaseUrl').value = config.minimaxBaseUrl;
+            document.getElementById('openaiApiKey').value = config.openaiApiKey;
+            document.getElementById('geminiApiKey').value = config.geminiApiKey;
+            document.getElementById('serpapiApiKey').value = config.serpapiApiKey;
+            document.getElementById('tavilyApiKey').value = config.tavilyApiKey;
+            
+            updateProviderFields();
+        }
+
+        function updateProviderFields() {
+            const provider = document.getElementById('llmProvider').value;
+            document.getElementById('minimaxFields').style.display = provider === 'minimax' ? 'block' : 'none';
+            document.getElementById('openaiFields').style.display = provider === 'openai' ? 'block' : 'none';
+            document.getElementById('geminiFields').style.display = provider === 'gemini' ? 'block' : 'none';
+        }
+
+        function saveConfig() {
+            config.llmProvider = document.getElementById('llmProvider').value;
+            config.minimaxApiKey = document.getElementById('minimaxApiKey').value;
+            config.minimaxBaseUrl = document.getElementById('minimaxBaseUrl').value;
+            config.openaiApiKey = document.getElementById('openaiApiKey').value;
+            config.geminiApiKey = document.getElementById('geminiApiKey').value;
+            config.serpapiApiKey = document.getElementById('serpapiApiKey').value;
+            config.tavilyApiKey = document.getElementById('tavilyApiKey').value;
+            
+            localStorage.setItem('citefinder_config', JSON.stringify(config));
+            toggleSettings();
+        }
+
+        function resetConfig() {
+            config = {
+                llmProvider: 'minimax',
+                minimaxApiKey: '',
+                minimaxBaseUrl: 'https://api.minimax.chat/v1',
+                openaiApiKey: '',
+                geminiApiKey: '',
+                serpapiApiKey: '',
+                tavilyApiKey: ''
+            };
+            localStorage.removeItem('citefinder_config');
+            loadConfig();
+        }
+
+        function toggleSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        // Word count
+        document.getElementById('inputText').addEventListener('input', function() {
+            const text = this.value.trim();
+            const words = text ? text.split(/\s+/).length : 0;
+            document.getElementById('wordCount').textContent = `${words} words`;
+        });
+
+        // Analyze function
+        async function analyze() {
+            const text = document.getElementById('inputText').value.trim();
+            if (!text) return;
+
+            const btn = document.getElementById('analyzeBtn');
+            btn.disabled = true;
+            btn.textContent = 'Analyzing...';
+            
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>Analyzing text and finding citations...</p></div>';
+
+            try {
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, config })
+                });
+                
+                const data = await response.json();
+                displayResults(data.results);
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Analyze';
+            }
+        }
+
+        function displayResults(results) {
+            const resultsDiv = document.getElementById('results');
+            const countDiv = document.getElementById('resultCount');
+            
+            if (!results || results.length === 0) {
+                countDiv.textContent = '';
+                resultsDiv.innerHTML = '<div class="empty-state"><p>No citations needed detected. Great job!</p></div>';
+                return;
+            }
+            
+            countDiv.textContent = `(${results.length})`;
+            
+            resultsDiv.innerHTML = results.map((item, i) => `
+                <div class="citation-card">
+                    <div class="sentence">${escapeHtml(item.sentence)}</div>
+                    <span class="badge">${item.reason}</span>
+                    ${item.paper ? `
+                        <div class="paper-info">
+                            <div class="paper-title">${escapeHtml(item.paper.title)}</div>
+                            <div class="paper-meta">${escapeHtml(item.paper.authors)} (${item.paper.year})</div>
+                            ${item.paper.doi ? `<div class="paper-doi">DOI: ${escapeHtml(item.paper.doi)}</div>` : ''}
+                            ${item.paper.url ? `<a href="${escapeHtml(item.paper.url)}" target="_blank" class="paper-url">View Paper →</a>` : ''}
+                        </div>
+                        <div class="bibtex">
+                            <div class="bibtex-header">
+                                <span>BibTeX</span>
+                                <button onclick="copyBibtex(${i})">Copy</button>
+                            </div>
+                            <pre id="bibtex-${i}">${generateBibtex(item.paper)}</pre>
+                        </div>
+                    ` : '<div class="no-paper">No paper found</div>'}
+                </div>
+            `).join('');
+        }
+
+        function generateBibtex(paper) {
+            const firstAuthor = paper.authors.split(',')[0].trim();
+            const lastName = firstAuthor.split(' ').pop().replace(/[^a-zA-Z]/g, '');
+            const year = paper.year !== 'n.d.' ? paper.year : '';
+            const key = (lastName + year).toLowerCase() || 'unknown';
+            
+            let bibtex = `@article{${key},\n`;
+            bibtex += `  title = {${paper.title}},\n`;
+            bibtex += `  author = {${paper.authors}},\n`;
+            if (year) bibtex += `  year = {${year}},\n`;
+            if (paper.venue) bibtex += `  journal = {${paper.venue}},\n`;
+            if (paper.doi) bibtex += `  doi = {${paper.doi}},\n`;
+            if (paper.url) bibtex += `  url = {${paper.url}},\n`;
+            bibtex = bibtex.replace(/,\n$/, '\n');
+            bibtex += `}`;
+            
+            return bibtex;
+        }
+
+        function copyBibtex(index) {
+            const text = document.getElementById(`bibtex-${index}`).textContent;
+            navigator.clipboard.writeText(text);
+            alert('Copied to clipboard!');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Initialize
+        loadConfig();
+    </script>
+</body>
+</html>
