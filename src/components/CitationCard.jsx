@@ -81,10 +81,23 @@ export default function CitationCard({ item, paper }) {
               DOI: {paper.doi}
             </span>
           )}
-          <span className="text-text-secondary text-xs">
-            Source: {paper.source}
-          </span>
         </div>
+        
+        {/* Search Info */}
+        {(paper.searchQuery || paper.searchSource) && (
+          <div className="mb-3 text-xs text-gray-500 bg-gray-50 p-2 rounded">
+            {paper.searchQuery && (
+              <span className="block">
+                <span className="font-medium">Query:</span> "{paper.searchQuery}"
+              </span>
+            )}
+            {paper.searchSource && (
+              <span>
+                <span className="font-medium">Source:</span> {paper.searchSource}
+              </span>
+            )}
+          </div>
+        )}
         
         {/* BibTeX toggle and copy */}
         <div>
