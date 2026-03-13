@@ -5,7 +5,7 @@ import LoadingState from './components/LoadingState';
 import EmptyState from './components/EmptyState';
 import Settings from './components/Settings';
 import { analyzeText } from './utils/analyzer';
-import { fetchCitationsEnhanced, getConfig } from './utils/citation';
+import { fetchCitationsEnhanced, getConfig, analyzeTextWithLLM } from './utils/citation';
 
 function App() {
   const [results, setResults] = useState([]);
@@ -31,8 +31,8 @@ function App() {
       const cfg = getConfig();
       setConfig(cfg);
       
-      // Analyze text to find sentences needing citations
-      const analysisResults = analyzeText(text);
+      // Analyze text to find sentences needing citations (using LLM)
+      const analysisResults = await analyzeTextWithLLM(text, cfg);
       
       if (analysisResults.length === 0) {
         setResults([]);

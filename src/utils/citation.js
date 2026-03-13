@@ -30,6 +30,136 @@ export function saveConfig(config) {
 }
 
 /**
+ * Split text into sentences (from analyzer.js logic)
+ */
+function splitIntoSentences(text) {
+  const sentenceRegex = /(?<![A-Z][a-z]?)\.(?=\s+[A-Z])|[!?](?=\s+[A-Z])/g;
+  let sentences = text.split(sentenceRegex);
+  
+  const cleaned = [];
+  let current = '';
+  
+  for (const sent of sentences) {
+    current += (current ? '. ' : '') + sent;
+    if (current.match(/[.!?]$/) || sent === sentences[sentences.length - 1]) {
+      if (current.trim()) {
+        cleaned.push(current.trim());
+      }
+      current = '';
+    }
+  }
+  
+  if (current.trim()) {
+    cleaned.push(current.trim());
+  }
+  
+  return cleaned.length > 0 ? cleaned : [text];
+}
+
+/**
+ * Use LLM to analyze text and identify sentences needing citations
+ */
+export async function analyzeTextWithLLM(text, config = null) {
+  const cfg = config || getConfig();
+  
+  if (!text || !text.trim()) {
+    return [];
+  }
+  
+  const sentences = splitIntoSentences(text);
+  
+  // Prepare prompt for LLM
+  const prompt = `Given the following text, analyze each sentence and identify which ones need academic citations.
+
+Text:
+${text}
+
+For each sentence that needs a citation (e.g., contains statistics, findings, claims, methods, data from other sources), respond with JSON in this format:
+[
+  {"sentence": "exact sentence text", "reason": "why citation is needed"}
+]
+
+Only include sentences that genuinely need a citation. Ignore sentences that:
+- Already have citations like (Smith, 2020) or [1]
+- Are purely author's own interpretations without external claims
+- Are transition sentences or introductions
+
+Return ONLY valid JSON array, nothing else.`;
+
+  try {
+    let response;
+    const { llmProvider, minimaxApiKey, minimaxBaseUrl, openaiApiKey, geminiApiKey } = cfg;
+    
+    switch (llmProvider) {
+      case 'openai':
+        response = await callOpenAI(openaiApiKey, prompt);
+        break;
+      case 'gemini':
+        response = await callGemini(geminiApiKey, prompt);
+        break;
+      case 'minimax':
+      default:
+        response = await callMinimax(minimaxApiKey, minimaxBaseUrl, prompt);
+        break;
+    }
+    
+    // Parse JSON response
+    const results = JSON.parse(response.replace(/```json|```/g, '').trim());
+    
+    return results.map((item, index) => ({
+      id: index,
+      sentence: item.sentence,
+      type: item.reason || 'claim',
+      keywords: [],
+      matchedText: ''
+    }));
+  } catch (error) {
+    console.error('LLM text analysis error:', error);
+    // Fallback to regex-based analysis
+    return analyzeTextFallback(text);
+  }
+}
+
+/**
+ * Fallback to regex-based analysis if LLM fails
+ */
+function analyzeTextFallback(text) {
+  const sentences = splitIntoSentences(text);
+  const results = [];
+  const CITATION_PATTERNS = [
+    { pattern: /\b(\d+(?:\.\d+)?%)\s+(increase|decrease|rise|fall|drop|decline|growth|reduction)/gi, type: 'statistic' },
+    { pattern: /\b(studies|research|experiments|surveys)\s+(show|demonstrate|reveal|indicate|suggest)/gi, type: 'finding' },
+    { pattern: /\baccording to\s+([A-Z][a-z]+)/gi, type: 'method' },
+    { pattern: /\b(found|shown|demonstrated)\s+that/i, type: 'finding' },
+  ];
+  
+  for (let i = 0; i < sentences.length; i++) {
+    const sentence = sentences[i].trim();
+    if (!sentence || sentence.length < 15) continue;
+    
+    // Skip if already has citation
+    if (sentence.match(/\([A-Za-z\s&]+,\s*\d{4}\)/) || sentence.match(/\[\d+\]/)) {
+      continue;
+    }
+    
+    for (const { pattern, type } of CITATION_PATTERNS) {
+      if (pattern.test(sentence)) {
+        results.push({
+          id: i,
+          sentence: sentence,
+          type: type,
+          keywords: [],
+          matchedText: ''
+        });
+        break;
+      }
+    }
+  }
+  
+  return results;
+}
+
+/**
  * Generate a search query from a sentence using LLM
  */
 export async function generateSearchQuery(sentence, config = null) {
