@@ -74,15 +74,24 @@ export async function analyzeTextWithLLM(text, config = null) {
 Text:
 ${text}
 
-For each sentence that needs a citation (e.g., contains statistics, findings, claims, methods, data from other sources), respond with JSON in this format:
+For each sentence that needs a citation, respond with JSON in this format:
 [
   {"sentence": "exact sentence text", "reason": "why citation is needed"}
 ]
 
-Only include sentences that genuinely need a citation. Ignore sentences that:
+A sentence needs a citation if it makes any of these claims:
+1. **Statistics/numbers**: percentages, data, metrics (e.g., "95% accuracy", "3x faster")
+2. **Research findings**: studies show, experiments demonstrate, research found
+3. **External claims**: claims about what other papers/authors stated
+4. **Strong factual statements**: assertions presented as facts that aren't the author's own analysis
+
+For strong factual statements, ask: "Is this the author's own data/analysis, or is this claiming something as a fact that needs support?" If it's a claim about what is generally true in the field, it needs citation.
+
+Ignore sentences that:
 - Already have citations like (Smith, 2020) or [1]
-- Are purely author's own interpretations without external claims
-- Are transition sentences or introductions
+- Are the author's own methodology descriptions
+- Are purely transitional sentences
+- Present the author's own findings/results from this paper
 
 Return ONLY valid JSON array, nothing else.`;
 
